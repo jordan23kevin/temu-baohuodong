@@ -1,3 +1,8 @@
+"""
+⚠️ DEPRECATED — 此脚本的 UI（旧版 Temu 营销页表格）已于 2026-06-11 下线。
+   请使用 `报活动_全自动.py`（v3.1.0），基于新版 Drawer 流程。
+"""
+
 """Temu 批量报名活动 — 通过 CDP 连接 Edge 完成营销活动报名流程"""
 import asyncio, sys, json, os, time
 from playwright.async_api import async_playwright

@@ -1,12 +1,13 @@
 """
-Hermes Browser Runtime Layer v1 — Edge 常驻服务化
-===================================================
+Hermes Browser Runtime Layer v1.1 — Edge 常驻服务化
+=====================================================
 核心原则：
   ❌ 浏览器不是资源（用完即弃）
   ✅ 浏览器是常驻服务（任务共享）
 
+项目：E:\Claude code\Temu自动化\报活动
 三层架构：
-  [Workflow Layer]  → 报活动_全自动.py
+  [Workflow Layer]  → 报活动_全自动.py（v3.1.0）
   [Runtime Layer]   → hermes_browser.py    ← 你在这里
   [IO Layer]        → download_manager.py
 

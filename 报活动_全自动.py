@@ -1,8 +1,8 @@
 """
-Temu 报活动 — 全自动一镜到底（Playwright 原生模式）v3.0.0
+Temu 报活动 — 全自动一镜到底（Playwright 原生模式）v3.1.0
 ======================================================
 一条命令跑完整个流程：选主题→选站点→选商品→生成模板→核价过滤→上传→导入→报名。
-v3.0 架构升级：HermesBrowser 常驻服务 + DownloadManager 事件驱动 + DOM级提取
+v3.1.0 全流程锁定：HermesBrowser 常驻服务 + DownloadManager 事件驱动 + DOM级提取
 """
 import os, sys, time, subprocess, json
 from pathlib import Path
@@ -59,7 +59,7 @@ def run_price_filter(template_path):
 
 def main():
     log("=" * 50)
-    log("Temu 报活动 — 全自动一镜到底")
+    log("Temu 报活动 — 全自动一镜到底 v3.1.0")
     log("=" * 50)
 
     # 使用 HermesBrowser 常驻服务（启动/连接/保活）
@@ -331,13 +331,6 @@ def main():
         return d && d.innerText.includes('已过滤') ? 'FILE_FOUND' : 'FILE_NOT_VISIBLE';
     }""")
     log(f"📋 {status}")
-
-    # ===== 安全暂停：等爸爸确认（通过聊天） =====
-    log("=" * 50)
-    log("⏸️  核价完成！等待爸爸确认")
-    log(f"    过滤后文件: {os.path.basename(filtered)}")
-    log("    爸爸说「继续」后再开始导入和报名")
-    log("=" * 50)
 
     log("开始导入...")
     page.evaluate("""() => {
