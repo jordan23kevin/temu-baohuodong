@@ -43,7 +43,8 @@ def run_price_filter(template_path):
     log(f"核价过滤: {os.path.basename(template_path)}")
     result = subprocess.run(
         ["python3", PRICE_FILTER, template_path],
-        capture_output=True, text=True, timeout=120
+        capture_output=True, text=True, encoding="utf-8", timeout=120,
+        env={**os.environ, "PYTHONIOENCODING": "utf-8"}
     )
     for line in result.stdout.strip().split("\n"):
         log(f"  {line}")
@@ -97,8 +98,8 @@ def main():
             const discMatch = discText.match(/[≤<]\\s*(\\d+\\.?\\d*)\\s*折/);
             if (!discMatch) continue;
             const discount = parseFloat(discMatch[1]);
-            // 筛选：≥6折、≤20天、排除爆款/秒杀
-            if (discount >= 6.0 && days <= 20 &&
+            // 筛选：≥5折、≤20天、排除爆款/秒杀
+            if (discount >= 5.0 && days <= 20 &&
                 !name.includes('爆款') && !name.includes('秒杀')) {
                 names.push(name);
             }
@@ -112,6 +113,21 @@ def main():
         return
     for i, n in enumerate(theme_names, 1):
         log(f"  {i}. {n}")
+
+    # 只处理指定的活动（最多6个，日期连续无空挡）
+    ALLOWED = [
+        "限时6折专区（6月）",
+        "周末48H大折扣专区（06/20-06/21）",
+        "72小时计划】夏促爆单专属链接（6.20-6.22）",
+        "72小时计划】夏促爆单专属链接（6.23-6.25）",
+        "周末48H大折扣专区（06/27-06/28）",
+        "72小时计划】夏促爆单专属链接（6.29-7.1）",
+    ]
+    theme_names = [n for n in theme_names if any(a in n for a in ALLOWED)]
+    log(f"  筛选后: {len(theme_names)} 个活动")
+    if not theme_names:
+        log("❌ 指定活动都不在列表中，退出")
+        return
 
     # ===== ② 打开 Drawer =====
     log("打开批量报名 Drawer...")
