@@ -25,7 +25,7 @@ from playwright.sync_api import sync_playwright
 EDGE_PATH = r"C:\Program Files (x86)\Microsoft\Edge\Application\msedge.exe"
 CDP_PORT = 9222
 CDP_URL = f"http://127.0.0.1:{CDP_PORT}"
-USER_DATA_DIR = r"C:\Users\Administrator\Desktop\edge-profile"
+USER_DATA_DIR = r"E:\edge"
 
 
 # =========================
