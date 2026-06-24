@@ -2,6 +2,66 @@
 
 > 项目：`E:\Claude code\Temu自动化\报活动`
 
+## v4.0.0（2026-06-24）Engineering OS 架构重构
+
+### 核心变更
+- **工程操作系统架构**：从"脚本项目"升级为分层 OS 架构
+- **状态机系统**：`core/state_machine.py` 全局状态机，state 序列化到 `state/state.json`
+- **任务注册表**：`core/task_registry.py`，每次运行生成唯一 task_id
+- **配置集中管理**：`config/settings.py` + `config/prices.py` + `config/sites.py`，不再散落
+- **流程编排**：`workflow/activity_pipeline.py` 9步编排，支持断点恢复
+- **步骤拆分**：9步拆到 `workflow/steps/` 独立文件
+- **服务层**：`services/browser_service.py` 浏览器单例 + `services/price_filter.py` 核价独立
+- **唯一入口**：`entrypoint/run.py`，clone 即可运行
+- **可恢复**：中断后重跑自动跳过已完成步骤
+- **可回滚**：v3.2.0-working tag 保留
+
+### 新目录结构
+```
+报活动/
+├── entrypoint/run.py        ← 唯一入口
+├── workflow/                ← 流程控制层
+│   ├── activity_pipeline.py
+│   └── steps/               ← 9步独立文件
+├── services/                ← 外部系统隔离层
+├── core/                    ← 核心抽象层
+├── config/                  ← 配置集中管理
+├── utils/                   ← 工具函数
+├── state/                   ← 状态持久化
+├── requirements.txt
+└── ARCHITECTURE.md          ← 架构文档
+```
+
+### 向后兼容
+- 旧入口 `报活动_全自动.py` 保留，可直接运行
+- 旧文件 `download_manager.py` / `hermes_browser.py` 保留
+- git tag `v3.2.0-working` 可随时回滚
+
+### 文件变更
+| 文件 | 操作 | 说明 |
+|------|:----:|------|
+| `entrypoint/run.py` | **新建** | 唯一启动入口 |
+| `ARCHITECTURE.md` | **新建** | 系统架构文档 |
+| `requirements.txt` | **新建** | 依赖清单 |
+| `.gitignore` | 修改 | 添加 state/state.json |
+| `core/state_machine.py` | **新建** | 全局状态机 + 序列化 |
+| `core/task_registry.py` | **新建** | 任务注册表 |
+| `services/browser_service.py` | **新建** | 浏览器服务层 |
+| `services/price_filter.py` | **新建** | 核价服务层 |
+| `services/download_manager.py` | 复制 | v2 保持不变 |
+| `workflow/activity_pipeline.py` | **新建** | 流程编排 |
+| `workflow/steps/extract.py` | **新建** | 步骤①活动提取 |
+| `workflow/steps/drawer_ops.py` | **新建** | 步骤②③④⑤ Drawer操作 |
+| `workflow/steps/product_select.py` | **新建** | 步骤⑥商品选择 |
+| `workflow/steps/download_submit.py` | **新建** | 步骤⑦⑧⑨下载核价上传 |
+| `config/settings.py` | **新建** | 全局配置 |
+| `config/prices.py` | **新建** | 17站价格表(唯一入口) |
+| `config/sites.py` | **新建** | 站点信息 |
+| `utils/log.py` | **新建** | GBK-safe 日志 |
+| `utils/date_parser.py` | **新建** | 日期解析工具 |
+| `state/recovery.py` | **新建** | 断点恢复逻辑 |
+| `README.md` | 重写 | v4.0.0 操作手册 |
+
 ---
 
 ## v3.2.0（2026-06-24）HermesBrowser 状态机 + DownloadManager v2 + 动态筛选
