@@ -4,6 +4,63 @@
 
 ---
 
+## v3.2.0（2026-06-24）HermesBrowser 状态机 + DownloadManager v2 + 动态筛选
+
+### 核心升级
+
+#### Runtime 层：HermesBrowser v2（状态机）
+- **状态机重构**：`HermesBrowserV2`，六态确定性流转（`EDGE_OFF → EDGE_STARTING → CDP_READY → BROWSER_CONNECTED → CONTEXT_READY → PAGE_READY`）
+- **CDP 探活替代 sleep**：`_wait_cdp_ready()` 0.5s 循环检测，不固定等 30s
+- **更精准的 CDP 检测**：检查 `webSocketDebuggerUrl` 字段而非简单 HTTP 200
+- **防重复启动**：`start_edge()` 先查 CDP 是否已就绪，已就绪则跳过
+- **修复 bug**：去掉 `_is_edge_running()` 中的 `or True` 假 alive 逻辑
+- **简化 API**：`get_page()` 唯一主入口全链路自动推进；`health()` 替代 `health_check()`
+- **向后兼容**：`HermesBrowser = HermesBrowserV2` 别名，调用方零改动
+
+#### IO 层：DownloadManager v2（文件稳定判定）
+- **`_wait_file_stable()`**：连续3次检测文件大小不变才确认下载完成，替代 v1 的简单存在检查
+- **task_id 注册表**：全链路追踪 WAITING → TRIGGERED → DOWNLOADING → DONE/FAILED
+- **`get_status()` / `get_active_tasks()`**：实时查询下载状态
+- 接口向后兼容，调用方无需改代码
+
+#### Workflow 层：活动筛选逻辑重构
+- **去掉硬编码白名单**：不再写死6个活动名，改为条件动态筛选
+- **过期自动过滤**：结束日期 < 当天的活动自动跳过
+- **日期连续检查**：按开始日期排序，前一个结束日+1 < 下一个开始日则跳过（不允许空挡）
+- **最多选6个**：从最早开始的活动依次选取
+- **动态日期**：`TODAY = date.today()` 替代硬编码
+
+### Bug 修复
+| # | 问题 | 文件 | 行 | 根因 | 修复 |
+|:-:|------|:----|:--:|------|------|
+| B1 | 商品翻页 `next.click()` 崩 | `报活动_全自动.py` | 326 | 商品只有1页时 `next` 为 null，漏判 `!next` | 加 `if (!next) return 'DONE'` |
+| B2 | 日志 `🎉` 表情 GBK 炸 | `报活动_全自动.py` | 411 | 中文 Windows 终端 GBK 编码不支持 emoji | 全替换为纯文本 |
+| B3 | 日志 `⏭` / `📋` 表情 GBK 炸 | `报活动_全自动.py` | 159,390 | 同上 | 全替换为纯文本 |
+| B4 | HermesBrowser `_is_edge_running()` `or True` | `hermes_browser.py` | 207 | 逻辑 bug，永远返回 True | 已重构为状态机，该行已删除 |
+
+### 本次成功运行（2026-06-24 SEMEMS 店）
+```
+页面活动: 50个 → 基础筛选: 7个 → 最终选定: 6个（连续无空挡）
+商品全选: 12页, 1193件全部选中
+模板下载: 3.4MB（DownloadManager v2 文件稳定判定通过）
+核价过滤: 84600行 → 1085行（删83515，降550，不动535）
+上传导入: 已确认并报名活动 ✅
+```
+
+### 文件变更
+| 文件 | 操作 | 说明 |
+|------|:----:|------|
+| `hermes_browser.py` | **重写** | v1 → v2 状态机架构 |
+| `download_manager.py` | **重写** | v1 → v2 文件稳定判定 + task_id 追踪 |
+| `报活动_全自动.py` | 修改 | 活动筛选重构(去白名单+日期连续), 修复B1/B2/B3, 版本头v3.2.0 |
+| `活动核价.py` | 修改 | 版本头 v3.1.0 → v3.2.0 |
+| `架构.md` | 重写 | 完整 v3.2.0 架构同步 |
+| `README.md` | 重写 | 完整 v3.2.0 操作手册 |
+| `SKILL.md` | 更新 | v3.2.0 核心流程 + 新坑点 |
+| `CHANGELOG.md` | 修改 | 本文 |
+
+---
+
 ## v3.1.0（2026-06-20）全流程锁定
 
 ### 变更

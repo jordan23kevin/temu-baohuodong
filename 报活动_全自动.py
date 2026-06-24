@@ -1,11 +1,16 @@
 """
-Temu 报活动 — 全自动一镜到底（Playwright 原生模式）v3.1.0
+Temu 报活动 — 全自动一镜到底（Playwright 原生模式）v3.2.0
 ======================================================
 一条命令跑完整个流程：选主题→选站点→选商品→生成模板→核价过滤→上传→导入→报名。
-v3.1.0 全流程锁定：HermesBrowser 常驻服务 + DownloadManager 事件驱动 + DOM级提取
+v3.2.0 核心升级：
+  - HermesBrowser v2 状态机（EDGE_OFF→PAGE_READY 确定性流转）
+  - DownloadManager v2 文件稳定判定（连续3次size不变才确认完成）
+  - 动态活动筛选（去掉硬编码白名单，按条件+日期连续+不过期 自动筛选）
+  - 商品翻页 null 保护修复
 """
-import os, sys, time, subprocess, json
+import os, sys, time, subprocess, json, re
 from pathlib import Path
+from datetime import datetime, date, timedelta
 from playwright.sync_api import sync_playwright
 from download_manager import DownloadManager
 from hermes_browser import HermesBrowser
@@ -59,15 +64,14 @@ def run_price_filter(template_path):
 
 def main():
     log("=" * 50)
-    log("Temu 报活动 — 全自动一镜到底 v3.1.0")
+    log("Temu 报活动 — 全自动一镜到底 v3.2.0")
     log("=" * 50)
 
     # 使用 HermesBrowser 常驻服务（启动/连接/保活）
     brw = HermesBrowser()
     brw.start_edge()
-    brw.ensure_alive()
-    page = brw.get_page()
-    context = brw.get_context()
+    page = brw.get_page()         # 状态机自动推进全链路
+    context = page.context
     dl = DownloadManager(context, page)
 
     # ===== ① 导航 =====
@@ -75,58 +79,115 @@ def main():
     page.goto(MARKETING_URL, wait_until="domcontentloaded", timeout=30000)
     time.sleep(8)
 
-    # ===== ① 分析活动列表（DOM级提取，无需 innerText） =====
+    # ===== ① 分析活动列表 =====
     log("分析活动列表...")
-    theme_names = page.evaluate("""() => {
-        // 直接定位活动数据表（CSS选择器，无 innerText 全量扫描）
+    raw_activities = page.evaluate("""() => {
         const tables = document.querySelectorAll('table.TB_tableWrapper_5-120-1');
         if (tables.length < 2) return [];
         const rows = tables[1].querySelectorAll('tr');
-        const names = [];
+        const acts = [];
         for (let i = 0; i < rows.length; i++) {
             const cells = rows[i].querySelectorAll('td');
             if (cells.length < 6) continue;
             const name = cells[0].innerText.trim().split('\\n')[0];
             if (!name) continue;
-            // 跳过长期有效的活动
             const dateText = cells[1].innerText;
-            if (dateText.includes('长期有效')) continue;
-            const daysMatch = dateText.match(/[（(](\\d+)天[）)]/);
-            if (!daysMatch) continue;
-            const days = parseInt(daysMatch[1]);
             const discText = cells[2].innerText;
-            const discMatch = discText.match(/[≤<]\\s*(\\d+\\.?\\d*)\\s*折/);
-            if (!discMatch) continue;
-            const discount = parseFloat(discMatch[1]);
-            // 筛选：≥5折、≤20天、排除爆款/秒杀
-            if (discount >= 5.0 && days <= 20 &&
-                !name.includes('爆款') && !name.includes('秒杀')) {
-                names.push(name);
-            }
+            acts.push({name, dateText, discText});
         }
-        return names;
+        return acts;
     }""")
-    log(f"  符合条件: {len(theme_names)} 个活动")
-    if not theme_names:
-        log("❌ 没有符合条件的活动，退出")
-        # browser stays open for inspection
-        return
-    for i, n in enumerate(theme_names, 1):
-        log(f"  {i}. {n}")
+    log(f"  页面共 {len(raw_activities)} 个活动")
 
-    # 只处理指定的活动（最多6个，日期连续无空挡）
-    ALLOWED = [
-        "限时6折专区（6月）",
-        "周末48H大折扣专区（06/20-06/21）",
-        "72小时计划】夏促爆单专属链接（6.20-6.22）",
-        "72小时计划】夏促爆单专属链接（6.23-6.25）",
-        "周末48H大折扣专区（06/27-06/28）",
-        "72小时计划】夏促爆单专属链接（6.29-7.1）",
-    ]
-    theme_names = [n for n in theme_names if any(a in n for a in ALLOWED)]
-    log(f"  筛选后: {len(theme_names)} 个活动")
+    # ---------- 解析工具函数 ----------
+    TODAY = date.today()
+
+    def parse_discount(t):
+        m = re.search(r'[≤<]\s*(\d+\.?\d*)\s*折', t)
+        return float(m.group(1)) if m else None
+
+    def parse_dates(t, name=''):
+        """从 dateText 解析 (开始日期, 结束日期)，支持多种格式"""
+        # 去掉"（N天）"后缀
+        body = re.split(r'[（(]\d+天[）)]', t)[0].strip()
+        if not body:
+            return None
+        body = body.replace('(', '（').replace(')', '）')
+
+        # 尝试 "6.23-6.25" / "06/27-06/28" 等跨日格式
+        m = re.search(r'(\d{1,2})[./](\d{1,2})\s*[-–]\s*(\d{1,2})[./](\d{1,2})', body)
+        if m:
+            sm, sd, em, ed = int(m.group(1)), int(m.group(2)), int(m.group(3)), int(m.group(4))
+            return (date(2026, sm, sd), date(2026, em, ed))
+
+        # 尝试 "6月" 整月格式
+        m = re.search(r'(\d{1,2})月', body)
+        if m:
+            month = int(m.group(1))
+            import calendar
+            last = calendar.monthrange(2026, month)[1]
+            return (date(2026, month, 1), date(2026, month, last))
+
+        # 从活动名中尝试解析日期（兜底）
+        m = re.search(r'(\d{1,2})[./](\d{1,2})\s*[-–]\s*(\d{1,2})[./](\d{1,2})', name)
+        if m:
+            sm, sd, em, ed = int(m.group(1)), int(m.group(2)), int(m.group(3)), int(m.group(4))
+            return (date(2026, sm, sd), date(2026, em, ed))
+
+        return None
+
+    # ---------- 基础筛选 ----------
+    candidates = []
+    for a in raw_activities:
+        name = a['name']
+        # 硬门槛
+        if '长期有效' in a['dateText']:
+            continue
+        discount = parse_discount(a['discText'])
+        if discount is None or discount < 5.0:
+            continue
+        if '爆款' in name or '秒杀' in name:
+            continue
+        # 解析日期
+        dr = parse_dates(a['dateText'], name)
+        if dr is None:
+            log(f"  无法解析日期，跳过: {name}")
+            continue
+        start_d, end_d = dr
+        # 计算天数（从日期范围计算，比页面显示更准确）
+        days = (end_d - start_d).days + 1
+        if days > 20:
+            continue
+        # 过期检查
+        if end_d < TODAY:
+            log(f"  已过期，跳过: {name} ({start_d}~{end_d})")
+            continue
+        candidates.append({'name': name, 'start': start_d, 'end': end_d, 'days': days, 'discount': discount})
+
+    log(f"  符合条件: {len(candidates)} 个活动")
+    for i, c in enumerate(candidates, 1):
+        log(f"  {i}. {c['name']} ({c['start']}~{c['end']}, {c['days']}天, {c['discount']}折)")
+
+    # ---------- 日期排序 + 连续无空挡筛选 ----------
+    candidates.sort(key=lambda x: x['start'])
+    selected = []
+    for c in candidates:
+        if not selected:
+            selected.append(c)
+        else:
+            last_end = selected[-1]['end']
+            # 日期连续（前一个结束日+1 >= 下一个开始日）
+            if c['start'] <= last_end + timedelta(days=1):
+                selected.append(c)
+            else:
+                log(f"  ⏭ 日期不连续，跳过: {c['name']} ({c['start']}~{c['end']})")
+        if len(selected) >= 6:
+            break
+
+    theme_names = [s['name'] for s in selected]
+    log(f"  最终选定: {len(theme_names)} 个活动")
     if not theme_names:
-        log("❌ 指定活动都不在列表中，退出")
+        log("[FAIL] 没有符合条件的活动，退出")
         return
 
     # ===== ② 打开 Drawer =====
@@ -263,7 +324,8 @@ def main():
             const ci = modal.querySelector('.add-goods_pagination__73bvr [data-testid="beast-core-checkbox-checkIcon"]');
             if (ci) ci.click();
             const next = modal.querySelector('[data-testid="beast-core-pagination-next"]');
-            const disabled = next && next.classList.contains('PGT_disabled_5-120-1');
+            if (!next) return 'DONE:ONEPAGE';
+            const disabled = next.classList.contains('PGT_disabled_5-120-1');
             const sel = modal.querySelector('.add-goods_right__WAraa')?.innerText?.substring(0, 30) || '?';
             if (disabled) return 'DONE:' + sel;
             next.click();
@@ -296,18 +358,18 @@ def main():
         filename=f"报名商品信息_{int(time.time())}.xlsx",
     )
     if not template:
-        log("❌ 下载失败，但浏览器保持存活。请检查后手动重试")
+        log("下载失败，但浏览器保持存活。请检查后手动重试")
         # browser stays open
         return
-    log(f"✅ 下载完成: {os.path.basename(template)} ({os.path.getsize(template)//1024}KB)")
+    log(f"下载完成: {os.path.basename(template)} ({os.path.getsize(template)//1024}KB)")
 
     # ===== ⑧ 核价过滤 =====
     filtered = run_price_filter(template)
     if not filtered:
-        log("❌ 核价过滤失败")
+        log("核价过滤失败")
         # browser stays open
         return
-    log(f"✅ 过滤完成: {os.path.basename(filtered)}")
+    log(f"过滤完成: {os.path.basename(filtered)}")
 
     # ===== ⑨ 上传+导入+报名 =====
     log("上传过滤后的文件...")
@@ -322,7 +384,7 @@ def main():
         fc.set_files(filtered)
         time.sleep(3)
     except Exception as e:
-        log(f"⚠️ 上传失败: {e}")
+        log(f"上传失败: {e}")
         # browser stays open
         return
 
@@ -330,7 +392,7 @@ def main():
         const d = document.querySelector('[class*="Drawer"]');
         return d && d.innerText.includes('已过滤') ? 'FILE_FOUND' : 'FILE_NOT_VISIBLE';
     }""")
-    log(f"📋 {status}")
+    log(f"文件状态: {status}")
 
     log("开始导入...")
     page.evaluate("""() => {
@@ -349,9 +411,9 @@ def main():
     }""")
     time.sleep(2)
 
-    log("=" * 50)
-    log("🎉 报活动全流程完成！")
-    log("=" * 50)
+    log("==" * 25)
+    log("报活动全流程完成！")
+    log("==" * 25)
 
     # browser stays open for inspection
 
