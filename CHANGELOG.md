@@ -2,7 +2,24 @@
 
 > 项目：`E:\Claude code\Temu自动化\报活动`
 
-## v4.0.0（2026-06-24）Engineering OS 架构重构
+## v4.0.1（2026-06-24）Self-Updating Agent System
+
+### 变更
+- **AGENTS.md 初始化**：OS 规范持久化，不再重复加载
+- **自维护架构**：AGENTS.md 作为系统内核，Agent 自动遵守规范
+- **自修复规则**：检测结构混乱/状态丢失/workflow越权/依赖污染时自动修复
+- **版本升级机制**：禁止重新发送 OS Prompt，改为版本升级（追加 diff）
+- **修复**：`browser_service.navigate()` 缺少 `sleep(8)` 导致提取 0 个活动
+- **修复**：`activity_pipeline._step_extract()` 没有检查空活动列表，导致空跑全程
+
+### 文件变更
+| 文件 | 操作 | 说明 |
+|------|:----:|------|
+| `AGENTS.md` | **新建** | OS 规范持久化内核 |
+| `services/browser_service.py` | 修改 | navigate() 加 sleep(8) 等页面渲染 |
+| `workflow/activity_pipeline.py` | 修改 | _step_extract 加空活动检查 |
+
+---
 
 ### 核心变更
 - **工程操作系统架构**：从"脚本项目"升级为分层 OS 架构

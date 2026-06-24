@@ -87,6 +87,8 @@ class ActivityPipeline:
 
     def _step_extract(self):
         self.theme_names = extract_and_filter(self.page)
+        if not self.theme_names:
+            raise RuntimeError("没有符合条件的活动，终止流程")
 
     def _step_generate(self):
         self.template_path = generate_template(self.page, self.context)

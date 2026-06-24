@@ -34,9 +34,11 @@ class BrowserService:
         return self
 
     def navigate(self, url=None):
-        """导航到目标页面"""
+        """导航到目标页面，等页面渲染完成"""
+        import time
         target = url or MARKETING_URL
         self.page.goto(target, wait_until="domcontentloaded", timeout=30000)
+        time.sleep(8)  # 等活动表格渲染
 
     def get_page(self):
         return self.page
