@@ -2,6 +2,47 @@
 
 > 项目：`E:\Claude code\Temu自动化\报活动`
 
+## v4.1.2（2026-06-29）活动筛选修复 — 6折门槛+日期解析+去重+防重复勾选
+
+### 问题
+1. **活动折扣门槛从 5 折改为 6 折** — 用户要求只选 ≥6折 活动
+2. **全年度日期格式无法解析** — `2026-06-30～2026-07-14（14天）` 格式不匹配原有 regex
+3. **同名活动重复选中** — 主页表格同名活动出现两次（14天 NEW + 31天旧版），都被加入勾选
+4. **主题弹窗同名活动重复勾选** — 所有匹配行都被勾上
+5. **日期括号格式不匹配** — 弹窗使用全角 `（6天）` 但 regex 用 `\(` 匹配半角
+
+### 修复
+| # | 文件 | 修复 |
+|:-:|------|------|
+| 1 | `config/settings.py` | `MIN_DISCOUNT = 5.0` → `6.0` |
+| 2 | `utils/date_parser.py` | 新增 `YYYY-MM-DD～YYYY-MM-DD` 完整日期格式 regex |
+| 3 | `workflow/steps/extract.py` | 候选列表按 name 去重，同名保留天数最短的 |
+| 4 | `workflow/steps/drawer_ops.py` | `indexOf` 匹配后 `splice` 从列表移除，防止二次勾选 |
+| 5 | `workflow/steps/drawer_ops.py` | regex 改用 `[（(](\\d+)天[）)]` 兼容全角/半角括号 |
+
+### 验证
+```
+6折门槛: 7候选 → 6选定
+主题勾选: 6/6 ✅
+商品全选: 12页 ✅
+核价过滤: 98610行 → 16645保留
+上传导入: ✅
+```
+
+### 文件变更
+| 文件 | 操作 | 说明 |
+|------|:----:|------|
+| `config/settings.py` | 修改 | MIN_DISCOUNT 5→6 |
+| `utils/date_parser.py` | 修改 | 加完整日期格式 |
+| `workflow/steps/extract.py` | 修改 | 加同名去重 |
+| `workflow/steps/drawer_ops.py` | 修改 | splice 防重复勾选 |
+| `entrypoint/run.py` | 修改 | 版本头 v4.1.2 |
+| `README.md` | 修改 | v4.1.2 修复记录 |
+| `ARCHITECTURE.md` | 修改 | 版本同步 |
+| `SKILL.md` | 修改 | 新坑点 |
+
+---
+
 ## v4.1.1（2026-06-29）商品全选修复 — Selector 大修
 
 ### 问题

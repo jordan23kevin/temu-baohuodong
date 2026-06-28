@@ -14,14 +14,14 @@
 ## 快速命令
 
 ```bash
-cd "E:/Claude code/Temu自动化/报活动" && python3 报活动_全自动.py
+cd "E:/Claude code/Temu自动化/报活动" && python entrypoint/run.py
 ```
 
 Edge 首次启动后即为常驻服务。后续再次运行自动重连 CDP（状态机自动推进）。
 
-## 核心流程 v3.2.0
+## 核心流程 v4.1.2
 
-① 分析活动列表（DOM级提取）→ 条件筛选(≥5折/≤20天/非爆款秒杀/不过期/日期连续/最多6个)
+① 分析活动列表（DOM级提取）→ 条件筛选(≥6折/≤20天/非爆款秒杀/不过期/同名去重/日期连续/最多6个)
 → ② 打开 Drawer → ③ 勾选专题活动
 → ④ 主题弹窗勾选（名称匹配）→ ⑤ 选17站 → ⑥ 选商品（逐页全选，null保护）
 → ⑦ 生成模板（DownloadManager v2 事件驱动 + 文件稳定判定）
@@ -54,3 +54,12 @@ download_manager.py  ← IO层（下载管理器 v2）
    - 翻页检测用 `[class*="PGT_next"]:not([class*="PGT_disabled"])` 而非硬编码 class
    - 改 100 条/页后必须回到第 1 页
    - 从分页器读取真实总页数，不写死
+9. **活动筛选（v4.1.2）**：
+   - `MIN_DISCOUNT` 在 `config/settings.py`，当前 6.0 折
+   - 日期解析已支持 `YYYY-MM-DD～YYYY-MM-DD` 完整格式
+   - 同名活动（14天NEW + 31天旧版）自动去重保留最短天数
+   - 主题弹窗每名称只勾一次（splice 移除已勾选的）
+   - 弹窗日期全角括号 `（N天）` 已兼容
+10. **回滚命令**：
+   - `git tag` 查看版本
+   - `git checkout v4.1.2` 回滚到此版本（当前稳定版）

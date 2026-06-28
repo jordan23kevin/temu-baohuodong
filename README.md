@@ -1,6 +1,6 @@
 # Temu 报活动 — 100% 复现操作手册
 
-> 版本：v4.1.1 (Engineering OS) · 最后更新：2026-06-29
+> 版本：v4.1.2 (Engineering OS) · 最后更新：2026-06-29
 > 架构：`ARCHITECTURE.md` · 演进：`CHANGELOG.md`
 
 ---
@@ -53,20 +53,26 @@ python entrypoint/run.py
 
 ---
 
-## 五、关键修复记录（v4.1.1）
+## 五、关键修复记录
 
-### 商品全选只勾到 790/1190 条
-
+### v4.1.1 — 商品全选 790/1190 条
 | 问题 | 修复 |
 |------|------|
 | 弹窗容器 selector 不匹配 | `[data-testid="beast-core-modal"]` → `[class*="MDL_innerWrapper"]` |
 | 每页条数下拉点不中 | `[data-testid="beast-core-select-header"]` → `[class*="ST_selectValue"]` |
 | 下一页禁用检测硬编码 | `PGT_disabled_5-120-1` → `[class*="PGT_next"]:not([class*="PGT_disabled"])` |
 | 翻页后页码偏移 | 改 100 条/页后强制回到第 1 页 |
-| 固定 20 页上限 | 从分页器动态读取真实总页数 |
-| 全选方式不稳定 | 优先 `.beast-core-table thead` checkbox，fallback 文本"全选"搜索 |
 
-详细见 `CHANGELOG.md` v4.1.1。
+### v4.1.2 — 活动筛选修复
+| 问题 | 修复 |
+|------|------|
+| 折扣门槛 5→6折 | `MIN_DISCOUNT = 6.0` |
+| 全年度日期格式不支持 | `date_parser.py` 加 `YYYY-MM-DD～YYYY-MM-DD` 匹配 |
+| 同名活动出现两次（14天+31天） | `extract.py` 同名去重，保留最短天数 |
+| 主题弹窗同名活动重复勾选 | `drawer_ops.py` splice 匹配后从列表移除 |
+| 弹窗日期全角括号不匹配 | regex `\((\\d+)天\)` → `[（(](\\d+)天[）)]` |
+
+详细见 `CHANGELOG.md`。
 
 | 站点 | 核价下限 | 报名价上限 |
 |------|:-------:|:---------:|
