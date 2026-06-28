@@ -48,3 +48,9 @@ download_manager.py  ← IO层（下载管理器 v2）
 5. **浏览器关闭**：不要用 `launch_persistent_context`（子进程），用 `DETACHED_PROCESS` + CDP
 6. **文件上传**：仅 Playwright 原生 mode file_chooser 有效，等2-3秒 React 更新
 7. **终端编码**：所有 log 已替换 emoji 为纯文本，防 GBK 炸
+8. **商品全选选择器（v4.1.1 fix）**：
+   - 弹窗容器用 `[class*="MDL_innerWrapper"]` 而非 `[data-testid="beast-core-modal"]`
+   - 每页条数用 `[class*="ST_selectValue"]` 点值文本
+   - 翻页检测用 `[class*="PGT_next"]:not([class*="PGT_disabled"])` 而非硬编码 class
+   - 改 100 条/页后必须回到第 1 页
+   - 从分页器读取真实总页数，不写死

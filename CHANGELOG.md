@@ -2,6 +2,48 @@
 
 > 项目：`E:\Claude code\Temu自动化\报活动`
 
+## v4.1.1（2026-06-29）商品全选修复 — Selector 大修
+
+### 问题
+**商品全选只勾到 790/1190 个商品**，漏了约 4 页。
+
+### 根因
+三个 selector 不匹配实际 Temu DOM：
+| # | 问题选择器 | 误 | 正 |
+|:-:|-----------|-----|------|
+| 1 | 弹窗容器 | `[data-testid="beast-core-modal"]` | `[class*="MDL_innerWrapper"]` |
+| 2 | 每页条数下拉 | `[data-testid="beast-core-select-header"]` | `[class*="ST_selectValue"]` |
+| 3 | 下一页禁用检测 | `PGT_disabled_5-120-1` 硬编码类 | `[class*="PGT_next"]:not([class*="PGT_disabled"])` |
+
+此外：
+- 切换 100 条/页后未回到第 1 页 → 起始页码偏移
+- 固定 20 页循环上限 → 页数不够
+- 第 1 页全选后 DOM 未完全加载 → 加 wait
+
+### 修复
+1. **弹窗容器** → `[class*="MDL_innerWrapper"]`（DOM 实测有效）
+2. **页面尺寸** → `[class*="ST_selectValue"]` 点值文本而非 header
+3. **全选方式** → 优先 `.beast-core-table thead [data-testid="beast-core-checkbox-checkIcon"]` 直接勾表头，fallback 文本"全选"搜索
+4. **翻页检测** → `[class*="PGT_next"]:not([class*="PGT_disabled"])` 通用类匹配
+5. **读取真实总页数** → 从分页组件 `PGT_pagerItem` 解析最大页码，动态循环
+6. **切回第 1 页** → 改 100 条/页后强制回到 page 1
+7. **等待** → sleep(3) 等页面尺寸切换完成，每页 sleep(1) 等 DOM 渲染
+8. **debug 日志** → 输出当前页码 + 已选计数追踪
+
+### 验证
+```
+每页: 20 → 100 ✅  总页数: 12  全部 12 页 全选=True
+模板: 98340 行原始数据
+核价过滤: 1625 条保留 → 上传导入成功
+```
+
+### 文件变更
+| 文件 | 操作 | 说明 |
+|------|:----:|------|
+| `workflow/steps/product_select.py` | **重写** | 全选逻辑大修，Temu DOM 选择器对齐 |
+
+---
+
 ## v4.1.0（2026-06-24）Hermes Autonomous Kernel v3
 
 ### 核心升级
