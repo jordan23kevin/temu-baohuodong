@@ -18,7 +18,7 @@ from workflow.activity_pipeline import ActivityPipeline
 
 def main():
     log("==" * 25)
-    log("Temu 报活动 — v4.1.2 (Engineering OS)")
+    log("Temu 报活动 — v4.1.3 (Engineering OS)")
     log("==" * 25)
 
     # ---- 检测是否有可恢复的任务 ----

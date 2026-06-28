@@ -25,7 +25,7 @@ DOWNLOADS = os.path.expanduser("~/Downloads")
 MIN_DISCOUNT = 6.0          # 最低折扣（折），6折以上
 MAX_DAYS = 20                # 最大活动天数
 MAX_ACTIVITIES = 6           # 最多选几个活动
-EXCLUDE_KEYWORDS = ["爆款", "秒杀"]  # 排除关键词
+EXCLUDE_KEYWORDS = ["爆款", "秒杀", "独立日"]  # 排除关键词
 
 # ===== 下载超时 =====
 DOWNLOAD_EVENT_TIMEOUT = 180   # 事件驱动超时（秒）

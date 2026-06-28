@@ -1,6 +1,6 @@
 # Temu 报活动 — 系统架构文档
 
-> 版本：v4.1.2 (Engineering OS)
+> 版本：v4.1.3 (Engineering OS)
 > 最后更新：2026-06-29
 
 ---

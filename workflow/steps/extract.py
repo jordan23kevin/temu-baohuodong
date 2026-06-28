@@ -75,8 +75,8 @@ def extract_and_filter(page):
         log(f"同名去重: {len(candidates)} → {len(deduped)} 个")
     candidates = deduped
 
-    # ---- 日期排序 + 连续无空挡 ----
-    candidates.sort(key=lambda x: x["start"])
+    # ---- 日期排序（同日期按折扣从高到低）+ 连续无空挡 ----
+    candidates.sort(key=lambda x: (x["start"], -x["discount"]))
     selected = []
     for c in candidates:
         if not selected:

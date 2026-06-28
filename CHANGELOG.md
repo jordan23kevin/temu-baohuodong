@@ -2,6 +2,47 @@
 
 > 项目：`E:\Claude code\Temu自动化\报活动`
 
+## v4.1.3（2026-06-29）世界杯入选修复 — 天数计算+折扣排序+排除独立日
+
+### 问题
+1. **世界杯7折嘉年华（20天）没被勾选** — `days_between` 多算1天（20→21），超了 MAX_DAYS=20
+2. **独立日夏季大促8折/85折占了最早名额** — 06-15 开始但用户不想要
+3. **同日期活动没按折扣排序** — 世界杯7折排在6折后面，先用折扣低的占了名额
+4. **排除关键词写错** — 写了"夏日"但活动名是"夏季"
+
+### 修复
+| # | 文件 | 修复 |
+|:-:|------|------|
+| 1 | `utils/date_parser.py` | `days_between` 去掉 `+1`，与 Temu UI 天数显示一致 |
+| 2 | `config/settings.py` | `EXCLUDE_KEYWORDS` 添加 `"独立日"` |
+| 3 | `workflow/steps/extract.py` | 排序改为 `(start_date, -discount)`，同日期先选高折扣 |
+| 4 | `config/settings.py` | `"夏日"` → `"独立日"`（更精准定位目标活动） |
+
+### 排序逻辑
+```
+改前: candidates.sort(key=lambda x: x["start"])
+改后: candidates.sort(key=lambda x: (x["start"], -x["discount"]))
+```
+
+### 验证
+```
+8候选 → 6选定（含世界杯7折嘉年华 ✅）
+主题勾选: 6/6 ✅
+商品全选: 12页 ✅
+核价: 98640行 → 17300保留
+上传导入: ✅
+```
+
+### 文件变更
+| 文件 | 操作 | 说明 |
+|------|:----:|------|
+| `config/settings.py` | 修改 | EXCLUDE_KEYWORDS +"独立日" |
+| `utils/date_parser.py` | 修改 | days_between 去掉+1 |
+| `workflow/steps/extract.py` | 修改 | 排序改为(日期, -折扣) |
+| `entrypoint/run.py` | 修改 | 版本头 v4.1.3 |
+
+---
+
 ## v4.1.2（2026-06-29）活动筛选修复 — 6折门槛+日期解析+去重+防重复勾选
 
 ### 问题

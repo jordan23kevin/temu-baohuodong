@@ -59,8 +59,8 @@ def _parse_date_range(text):
 
 
 def days_between(start, end):
-    """计算活动天数"""
-    return (end - start).days + 1
+    """计算活动天数（与Temu UI显示一致，不含+1）"""
+    return (end - start).days
 
 
 def is_expired(end_date, today=None):
