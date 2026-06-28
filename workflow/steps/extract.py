@@ -64,6 +64,17 @@ def extract_and_filter(page):
     for c in candidates:
         log(f"  {c['name']} ({c['start']}~{c['end']}, {c['days']}天, {c['discount']}折)")
 
+    # ---- 同名去重：同名活动只保留天数最短的 ----
+    seen = {}
+    for c in candidates:
+        key = c["name"]
+        if key not in seen or c["days"] < seen[key]["days"]:
+            seen[key] = c
+    deduped = list(seen.values())
+    if len(deduped) < len(candidates):
+        log(f"同名去重: {len(candidates)} → {len(deduped)} 个")
+    candidates = deduped
+
     # ---- 日期排序 + 连续无空挡 ----
     candidates.sort(key=lambda x: x["start"])
     selected = []

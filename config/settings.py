@@ -22,7 +22,7 @@ MARKETING_URL = "https://agentseller.temu.com/activity/marketing-activity"
 DOWNLOADS = os.path.expanduser("~/Downloads")
 
 # ===== 活动筛选配置 =====
-MIN_DISCOUNT = 5.0          # 最低折扣（折）
+MIN_DISCOUNT = 6.0          # 最低折扣（折），6折以上
 MAX_DAYS = 20                # 最大活动天数
 MAX_ACTIVITIES = 6           # 最多选几个活动
 EXCLUDE_KEYWORDS = ["爆款", "秒杀"]  # 排除关键词

@@ -59,7 +59,9 @@ def select_themes(page, theme_names):
             const tds = rows[r].querySelectorAll('td');
             if (tds.length < 3) continue;
             const n = (tds[2].innerText || '').split('\\n')[0];
-            if (names.indexOf(n) >= 0) {{
+            const idx = names.indexOf(n);
+            if (idx >= 0) {{
+                names.splice(idx, 1);  // 移除已勾选的，同名活动不重复勾
                 rows[r].scrollIntoView({{block: 'center'}});
                 const ci = rows[r].querySelector('[data-testid="beast-core-checkbox-checkIcon"]');
                 if (ci) {{ ci.click(); count++; }}

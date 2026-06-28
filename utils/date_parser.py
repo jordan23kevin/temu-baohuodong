@@ -30,6 +30,18 @@ def _parse_date_range(text):
     """从文本中提取日期范围 (start, end)"""
     text = text.replace("(", "（").replace(")", "）")
 
+    # "2026-06-30～2026-07-20" 完整日期格式
+    m = re.search(r'(\d{4})[-.](\d{1,2})[-.](\d{1,2})\s*[～~\-–]\s*(\d{4})[-.](\d{1,2})[-.](\d{1,2})', text)
+    if m:
+        sy, sm, sd, ey, em, ed = int(m.group(1)), int(m.group(2)), int(m.group(3)), int(m.group(4)), int(m.group(5)), int(m.group(6))
+        return (date(sy, sm, sd), date(ey, em, ed))
+
+    # "2026-06-30～07-20" 省略结束年份
+    m = re.search(r'(\d{4})[-.](\d{1,2})[-.](\d{1,2})\s*[～~\-–]\s*(\d{1,2})[-.](\d{1,2})', text)
+    if m:
+        y, sm, sd, em, ed = int(m.group(1)), int(m.group(2)), int(m.group(3)), int(m.group(4)), int(m.group(5))
+        return (date(y, sm, sd), date(y, em, ed))
+
     # "6.23-6.25" / "06/27-06/28" 等跨日格式
     m = re.search(r'(\d{1,2})[./](\d{1,2})\s*[-–]\s*(\d{1,2})[./](\d{1,2})', text)
     if m:
