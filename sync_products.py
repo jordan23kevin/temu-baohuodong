@@ -39,10 +39,37 @@ BATCH = 30  # 价格接口并发批大小
 
 # 同步结果（供 bridge 轮询读取）
 RESULT_FILE = os.path.join(OUT_DIR, "latest_sync_result.json")
+# 用户"好了"信号文件（与核价 go.signal 同机制，放项目根）
+GO_SIGNAL = os.path.join(os.path.dirname(os.path.abspath(__file__)), "go.signal")
+NEWON_URL = "https://agentseller.temu.com/newon/product-select"
 
 
 def log(msg):
     print(msg, flush=True)
+
+
+def wait_go_signal(timeout=1800):
+    """等用户点『好了』（go.signal 文件出现）再开始；超时 30 分钟自动开始。"""
+    # 清掉旧的
+    try:
+        os.remove(GO_SIGNAL)
+    except OSError:
+        pass
+    log("Edge 已启动。请在浏览器里：1) 登录 Temu  2) 确认「上新生命周期管理全球」页面已打开")
+    log("准备好后，点击页面上的『👌 好了』按钮即自动开始获取商品信息")
+    t0 = time.time()
+    while True:
+        if os.path.exists(GO_SIGNAL):
+            try:
+                os.remove(GO_SIGNAL)
+            except OSError:
+                pass
+            log("收到『好了』信号，开始获取商品信息")
+            return
+        if time.time() - t0 > timeout:
+            log("等待『好了』信号超时（30分钟），自动开始")
+            return
+        time.sleep(1)
 
 
 def parse_pages_arg(text):
@@ -58,15 +85,16 @@ def parse_pages_arg(text):
 
 
 def find_newon_page(browser):
-    """在现有 Edge 标签页里找上新页，找不到则新建"""
+    """在现有 Edge 标签页里找上新页，找不到则打开新页面导航到上新页"""
     for ctx in browser.contexts:
         for page in ctx.pages:
             if PAGE_URL_KEYWORD in (page.url or ""):
+                page.bring_to_front()
                 return page
-    # 没有上新页：用第一个 context 新建
+    # 没有上新页：用第一个 context 新建并导航
     ctx = browser.contexts[0]
     page = ctx.new_page()
-    page.goto("https://agentseller.temu.com/newon/product-select", wait_until="domcontentloaded", timeout=60000)
+    page.goto(NEWON_URL, wait_until="domcontentloaded", timeout=60000)
     time.sleep(5)
     return page
 
@@ -222,60 +250,75 @@ def write_result(payload):
 
 def main():
     ap = argparse.ArgumentParser(description="报活动前同步最新商品信息")
-    ap.add_argument("--pages", default="5", help="页数：'5' 或 '1-3'（每页 50 商品，默认 5 页）")
+    ap.add_argument("--pages", default="1-5", help="页范围：'5' 或 '1-3'（每页 50 商品，默认 1-5 页）")
+    ap.add_argument("--start", type=int, default=None, help="起始页（与 --end 配对）")
+    ap.add_argument("--end", type=int, default=None, help="结束页（与 --start 配对）")
     args = ap.parse_args()
-    start_page, end_page = parse_pages_arg(args.pages)
+    if args.start is not None and args.end is not None:
+        start_page, end_page = args.start, args.end
+    else:
+        start_page, end_page = parse_pages_arg(args.pages)
     n_pages = end_page - start_page + 1
 
     t0 = time.time()
     log(f"== 商品信息同步 == 页范围 {start_page}-{end_page}（{n_pages} 页 × 50 商品）")
-    log("[1/4] 连接 Edge (CDP 9222)…")
 
-    with sync_playwright() as p:
-        browser = p.chromium.connect_over_cdp(CDP_URL)
-        page = find_newon_page(browser)
-        log(f"  ✅ 已连接页面: {page.url[:80]}")
+    # 自动打开 Edge（CDP 已就绪则直接复用，未启动则拉起新 Edge）
+    from hermes_browser import HermesBrowser
+    hb = HermesBrowser()
+    hb.start_edge()
+    log("[1/5] Edge 就绪 (CDP 9222)")
+    hb.connect_browser()
+    hb.ensure_context()
+    browser = hb._browser
+    page = find_newon_page(browser)
+    log(f"  ✅ 已定位上新页面: {page.url[:80]}")
+    page.bring_to_front()
 
-        log("[2/4] 抓取商品基础信息…")
-        meta_list = fetch_pages(page, start_page, end_page)
-        log(f"  ✅ 共 {len(meta_list)} 个 SKU（去重后）")
+    # 等用户点『好了』才开始
+    wait_go_signal()
 
-        log("[3/4] 抓取 17 站价格…")
-        price_map = fetch_prices(page, meta_list)
-        n_ok = sum(1 for s in price_map.values() if s)
-        log(f"  ✅ 价格获取 {n_ok}/{len(meta_list)}")
+    log("[2/5] 抓取商品基础信息…")
+    meta_list = fetch_pages(page, start_page, end_page)
+    log(f"  ✅ 共 {len(meta_list)} 个 SKU（去重后）")
 
-        log("[4/4] 生成 Excel/JSON…")
-        rows = build_rows(meta_list, price_map)
-        ts = datetime.datetime.now().strftime("%Y%m%d_%H%M%S")
-        os.makedirs(OUT_DIR, exist_ok=True)
-        excel_path = os.path.join(OUT_DIR, f"product_sync_{ts}.xlsx")
-        json_path = os.path.join(OUT_DIR, f"product_sync_{ts}.json")
-        save_excel(rows, excel_path)
-        with open(json_path, "w", encoding="utf-8") as f:
-            json.dump(rows, f, ensure_ascii=False, indent=1)
+    log("[3/5] 抓取 17 站价格…")
+    price_map = fetch_prices(page, meta_list)
+    n_ok = sum(1 for s in price_map.values() if s)
+    log(f"  ✅ 价格获取 {n_ok}/{len(meta_list)}")
 
-        spus = len({r["SPU ID"] for r in rows})
-        colors = len({(r["SPU ID"], r["SKC ID"]) for r in rows})
-        skus = len({r["SKU ID"] for r in rows})
-        elapsed = int(time.time() - t0)
-        log(f"  ✅ Excel: {excel_path}")
-        log(f"  ✅ JSON:  {json_path}")
-        log(f"  ✅ 汇总: {spus} 商品 / {colors} 颜色 / {skus} SKU / {len(rows)} 行（{elapsed}s）")
+    log("[4/5] 生成 Excel/JSON…")
+    rows = build_rows(meta_list, price_map)
+    ts = datetime.datetime.now().strftime("%Y%m%d_%H%M%S")
+    os.makedirs(OUT_DIR, exist_ok=True)
+    excel_path = os.path.join(OUT_DIR, f"product_sync_{ts}.xlsx")
+    json_path = os.path.join(OUT_DIR, f"product_sync_{ts}.json")
+    save_excel(rows, excel_path)
+    with open(json_path, "w", encoding="utf-8") as f:
+        json.dump(rows, f, ensure_ascii=False, indent=1)
 
-        write_result({
-            "ok": True,
-            "pages": f"{start_page}-{end_page}",
-            "spu_count": spus,
-            "color_count": colors,
-            "sku_count": skus,
-            "row_count": len(rows),
-            "elapsed_sec": elapsed,
-            "excel_path": excel_path,
-            "json_path": json_path,
-            "excel_name": os.path.basename(excel_path),
-            "finished_at": datetime.datetime.now().isoformat(),
-        })
+    spus = len({r["SPU ID"] for r in rows})
+    colors = len({(r["SPU ID"], r["SKC ID"]) for r in rows})
+    skus = len({r["SKU ID"] for r in rows})
+    elapsed = int(time.time() - t0)
+    log("[5/5] 完成")
+    log(f"  ✅ Excel: {excel_path}")
+    log(f"  ✅ JSON:  {json_path}")
+    log(f"  ✅ 汇总: {spus} 商品 / {colors} 颜色 / {skus} SKU / {len(rows)} 行（{elapsed}s）")
+
+    write_result({
+        "ok": True,
+        "pages": f"{start_page}-{end_page}",
+        "spu_count": spus,
+        "color_count": colors,
+        "sku_count": skus,
+        "row_count": len(rows),
+        "elapsed_sec": elapsed,
+        "excel_path": excel_path,
+        "json_path": json_path,
+        "excel_name": os.path.basename(excel_path),
+        "finished_at": datetime.datetime.now().isoformat(),
+    })
 
 
 if __name__ == "__main__":
